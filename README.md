@@ -14,7 +14,7 @@ qt.displayInternal(Suffix=suff)
 qt.displayMDS(Suffix=suff)
 qt.displayNamesScatter(Suffix='_Cont')
 
-IdxGoodSamples = qt.compute_dataset_quality(matrix=matrix,NR=100)
+IdxGoodSamples = qt.compute_samples_quality(matrix=matrix,NR=100)
 
 qt.display_samples_quality(Suffix='_Cont')
 

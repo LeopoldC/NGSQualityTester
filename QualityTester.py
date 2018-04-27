@@ -27,7 +27,7 @@ qt.displayInternal(Suffix=suff)
 qt.displayMDS(Suffix=suff)
 qt.displayNamesScatter(Suffix=suff)
 
-IdxGoodSamples = qt.compute_dataset_quality(matrix=matrix,NR=100,Tz=2.32)
+IdxGoodSamples = qt.compute_samples_quality(matrix=matrix,NR=100,Tz=2.32)
 
 qt.display_samples_quality(Suffix=suff)
 
@@ -166,7 +166,7 @@ class QualityTester:
 
         self.OptDistMat = self.computeDistanceMatrix(matrix,Distance,Kernel)
 
-        self.IdxGoodSamples,self.SilZ = ZscoreSilhouetteQuality(OptDistMat,labels,Tz,NR)
+        self.IdxGoodSamples,self.SilZ = ZscoreSilhouetteQuality(self.OptDistMat,self.labels,Tz,NR)
 
         N = len(self.SilZ)
         Nk = len(self.IdxGoodSamples)

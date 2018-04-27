@@ -1,6 +1,7 @@
 from sklearn.metrics import silhouette_samples
 from sklearn.cluster import DBSCAN
 from sklearn.ensemble import IsolationForest
+import numpy as np
 
 def ZscoreSilhouetteQuality(OptDistMat,labels,Tz,NR):
 
