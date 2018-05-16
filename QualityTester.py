@@ -33,11 +33,12 @@ qt.display_samples_quality(Suffix=suff)
 
 '''
 class QualityTester:
-    def __init__(self,Binary=False):
+    def __init__(self,Binary=False,displaytop=10):
         '''
             Bool: Boolean that indicate if the data are Binary (0/1)
             or Continuous. The outcome is different distance mesures
         '''
+
         #----------------------------
         #   Distances
         #----------------------------
@@ -53,8 +54,9 @@ class QualityTester:
             def func(x,key=key): return pairwise_distances(x,metric=key)
             self.AllDistances[key] = func
 
-        #Mutual information based on MIC
+        #Other distances
         self.AllDistances.update({'MIC':MIC})
+        self.AllDistances.update({'Spearman':Spearman})
 
         #None function, ie no distance function
         def func(x): return x
@@ -76,7 +78,7 @@ class QualityTester:
         #----------------------------
         #   Internal Indexes
         #----------------------------
-        self.AllInternIndex = {key:f for f,key in [(CalinskiHarabaz,'CalinskiHarabaz'),
+        self.AllInternIndex = {key:f for f,key in [(log10CalinskiHarabaz,'log10CalinskiHarabaz'),
                                      (Silhouette,'Silhouette'),
                                      # (Dunn,'Dunn'),
                                      (Connectivity,'Connectivity')]}
@@ -92,9 +94,16 @@ class QualityTester:
                     if Dkey is not 'None' or Kkey is not 'None': #Remove the None/None
                         self.Res[Ikey][Dkey + ' / ' + Kkey] = []
 
-        self.Keys.update({'Dist-Kernel':self.Res[self.Keys['InternIndex'][0]].keys()})
+        # self.Keys.update({'Dist-Kernel':self.Res[self.Keys['InternIndex'][0]].keys()})
 
-    def compute_distances(self,matrix,labels,ComputeMDS=True):
+        #Display only the top performer
+        if displaytop>0:
+            self.displaytop = displaytop
+        else:
+            self.displaytop = len(self.Res[Ikey].keys())
+
+
+    def compute_distances(self,matrix,labels,GetMDS=True):
         '''
             Compute all distances matrices and kernels on the matrix
             and compute the internal index according to the labels
@@ -102,19 +111,19 @@ class QualityTester:
 
         self.Mat = {}
         self.labels = labels
-        self.ComputeMDS = ComputeMDS
-        if self.ComputeMDS: self.MDS = {}
+        self.GetMDS = GetMDS
+        if self.GetMDS: self.MDS = {}
 
         for Dkey in self.Keys['Distance']:
             print '\n' + Dkey
-            if self.computeMDS: self.MDS.update({Dkey:{}})
+            if self.GetMDS: self.MDS.update({Dkey:{}})
 
             for Kkey in self.Keys['Kernel']:
                 print '\t' + Kkey
                 DKMat = self.computeDistanceMatrix(matrix,Distance=Dkey,Kernel=Kkey)
 
                 if Dkey is not 'None' or Kkey is not 'None':
-                    if self.ComputeMDS: self.MDS[Dkey].update({Kkey:self.computeMDS(DKMat)})
+                    if self.GetMDS: self.MDS[Dkey].update({Kkey:self.computeMDS(DKMat)})
 
                     for Ikey in self.Keys['InternIndex']:
                         self.Res[Ikey][Dkey + ' / ' + Kkey] = self.AllInternIndex[Ikey](DKMat,labels)
@@ -134,7 +143,7 @@ class QualityTester:
         # tsne = TSNE(n_components=2,metric='precomputed')
         # return tsne.fit_transform(matrix)
 
-    def compute_samples_quality(self,matrix,Distance=None,Kernel=None,NR=100,Tz=2.32):
+    def compute_samples_quality(self,matrix,Distance=None,Kernel=None,NR=100,Tz=2.32,Ikey='Silhouette'):
         '''
             Compute the quality of each profiles according to Distance / Kernel
             By default, the Distance/Kernel with the best silhouette score is choosen.
@@ -149,7 +158,7 @@ class QualityTester:
         '''
         #Compute Optimal distance matrix
         if Distance is None and Kernel is None:
-            Ikey = 'Silhouette'
+
             values = np.array(self.Res[Ikey].values())
             keys = np.array(self.Res[Ikey].keys())
 
@@ -160,7 +169,7 @@ class QualityTester:
             Distance = BestDist[0]
             Kernel = BestDist[1]
 
-            print 'Using the best distance / kernel according to Silouette Index: '
+            print 'Using the best distance / kernel according to '+Ikey+' Index: '
             print '--> (Distance,Kernel) = {}'.format((Distance,Kernel))
 
 
@@ -234,17 +243,17 @@ class QualityTester:
             Display Internal Indexes on all matrices
         '''
         width = 0.35 # the width of the bars
-        fig, ax = plt.subplots(1,len(self.Keys['InternIndex']),figsize=(65,45))
+        fig, ax = plt.subplots(1,len(self.Keys['InternIndex']),figsize=(45,int(self.displaytop*1.5)))
 
         for ik,Ikey in enumerate(self.Keys['InternIndex']):
             values = np.array(self.Res[Ikey].values())
             keys = np.array(self.Res[Ikey].keys())
-
             idx = np.argsort(values)
             idx = idx[~np.isnan(values[idx])]
 
             if Ikey=='Connectivity': idx = idx[::-1]
 
+            idx = idx[-self.displaytop:]
             sorted_values = values[idx]
             sorted_keys = keys[idx]
 
@@ -252,19 +261,11 @@ class QualityTester:
 
             ind = np.arange(len(idx))
 
-            if Ikey=='CalinskiHarabaz':
-                set_log = True
-            else:
-                set_log = False
-
             # for kk,key in enumzerate(sorted_keys):
-            if set_log == False:
-                ax[ik].barh(ind, sorted_values)#, color=colors[ki])
-            else:
-                ax[ik].barh(ind, np.log10(sorted_values+1)) #+1 is added to avoid negative values
+            ax[ik].barh(ind, sorted_values)
 
 
-            if set_log == True: ax[ik].set_xlabel('log10')
+            # if set_log == True: ax[ik].set_xlabel('log10')
 
             ax[ik].grid(color='k',linestyle='--',linewidth=0.1)
             ax[ik].set_yticks(ind)
@@ -310,26 +311,50 @@ class QualityTester:
 
         plt.show()
 
-    def displayNamesScatter(self,Save=True,Suffix=''):
+    def displayNamesScatter(self,Save=True,Suffix='',IkeyX='Silhouette',IkeyY='Connectivity'):
         '''
             Display Internal Indexes on all matrices
+            Ikey = CalinskiHarabaz, Silhouette, Connectivity
         '''
-        fig, ax = plt.subplots(1,1,figsize=(30,30))
-        for dk,Dkey in  enumerate(self.Keys['Distance']):
-            for kk,Kkey in  enumerate(self.Keys['Kernel']):
-                if Dkey is not 'None' or Kkey is not 'None':
-                    ax.scatter(self.Res['Silhouette'][Dkey + ' / ' + Kkey],
-                               self.Res['Connectivity'][Dkey + ' / ' + Kkey],
-                               facecolors='none',
-                               )
-                    ax.annotate(Dkey + ' / ' + Kkey,
-                                (self.Res['Silhouette'][Dkey + ' / ' + Kkey],
-                                self.Res['Connectivity'][Dkey + ' / ' + Kkey])
-                                )
+        fig, ax = plt.subplots(1,1,figsize=(self.displaytop,self.displaytop))
+
+        keys=[]
+        for Ikey in [IkeyX,IkeyY]:
+            values = np.array(self.Res[Ikey].values())
+            keysI = np.array(self.Res[Ikey].keys())
+            idx = np.argsort(values)
+            idx = idx[~np.isnan(values[idx])]
+
+            if Ikey=='Connectivity': idx = idx[::-1]
+
+            idx = idx[-self.displaytop:]
+            keys = keys + list(keysI[idx])
+
+        keys = list(set(keys))
+
+        for key in keys:
+            ax.scatter(self.Res[IkeyX][key],
+                       self.Res[IkeyY][key],
+                       facecolors='none')
+            ax.annotate(key,
+                        (self.Res[IkeyX][key],
+                         self.Res[IkeyY][key]))
+
+        # for dk,Dkey in  enumerate(self.Keys['Distance']):
+        #     for kk,Kkey in  enumerate(self.Keys['Kernel']):
+        #         if Dkey is not 'None' or Kkey is not 'None':
+        #             ax.scatter(self.Res['Silhouette'][Dkey + ' / ' + Kkey],
+        #                        self.Res['Connectivity'][Dkey + ' / ' + Kkey],
+        #                        facecolors='none',
+        #                        )
+        #             ax.annotate(Dkey + ' / ' + Kkey,
+        #                         (self.Res['Silhouette'][Dkey + ' / ' + Kkey],
+        #                         self.Res['Connectivity'][Dkey + ' / ' + Kkey])
+        #                         )
 
         ax.grid(color='k',linestyle='--',linewidth=0.1)
-        ax.set_xlabel('Silhouette')
-        ax.set_ylabel('Connectivity')
+        ax.set_xlabel(IkeyX)
+        ax.set_ylabel(IkeyY)
         # ax.set_ylabel('log10 CalinskiHarabaz')
 
         if Save:
@@ -401,9 +426,10 @@ def Dunn(DistMat,labels):
 
 
 def Silhouette(Distmat,labels):
-    s = silhouette_score(Distmat,labels,metric='precomputed')
+    s = silhouette_samples(Distmat,labels,metric='precomputed')
+    s[np.isnan(s)] = 0 #Nan append when 2 clusters has zeros intra and inter distance
     # if s<0: s=0
-    return s
+    return s.mean()
 def CalinskiHarabaz(Distmat,labels):
 
     #Coordinates Matrix
@@ -419,7 +445,13 @@ def CalinskiHarabaz(Distmat,labels):
     SSB = sum([len(idx_labels[i])*np.sum((cc-Center)**2) for i,cc in enumerate(ClusterCenter)])
     # overall within-cluster variance
     SSW = sum([np.sum(np.sum((CoordMat[idx,:]-ClusterCenter[i][None,:])**2,axis=0)) for i,idx in enumerate(idx_labels)])
+
     return SSB/SSW * (Distmat.shape[0]-len(idx_labels))/(len(idx_labels)-1)
+
+
+def log10CalinskiHarabaz(Distmat,labels):
+    CS = CalinskiHarabaz(Distmat,labels)
+    return np.log10(CS+1)
 
 '''
      Calinski-Harabasz:
@@ -454,6 +486,12 @@ def MIC(X):
     MicVect = MicVect + MicVect.T - np.diag(np.diag(MicVect))
 
     return 1-MicVect #MIC to Distance
+
+#Spearman Distance
+from scipy.stats import spearmanr
+def Spearman(X):
+    rho, _ = spearmanr(X.T)
+    return 1-rho
 
 #-----------------------------------------------------------------------
 #           Kernels
