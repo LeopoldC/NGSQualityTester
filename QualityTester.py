@@ -21,7 +21,7 @@ import QualityTester as QT
 #labels=Samples : Integers corresponding to cluster assignement
 
 qt = QT.QualityTester(Binary=False) #Binary=True  if dataset is binary
-qt.compute_distances(matrix=matrix,labels=labels,ComputeMDS=True)
+qt.compute_distances(matrix=matrix,labels=labels,GetMDS=True)
 suff = '_Cont' #Suffix for the name of the images
 qt.displayInternal(Suffix=suff)
 qt.displayMDS(Suffix=suff)
@@ -46,7 +46,7 @@ class QualityTester:
         # The input distance matrix should have (Samples x Features) dimensions
         self.AllDistances = {}
         if Binary == False:
-            Dist = ['cityblock','cosine','euclidean','l1','l2','manhattan','braycurtis', 'canberra', 'chebyshev', 'correlation', 'hamming', 'mahalanobis', 'minkowski', 'seuclidean', 'sqeuclidean']
+            Dist = ['cityblock','cosine','euclidean','l1','l2','manhattan','braycurtis', 'canberra', 'chebyshev', 'correlation', 'hamming', 'minkowski', 'seuclidean', 'sqeuclidean']
         if Binary == True:
             Dist = ['cityblock','cosine','euclidean','l1','l2','manhattan','braycurtis', 'canberra', 'chebyshev', 'correlation', 'dice', 'hamming', 'jaccard', 'matching', 'minkowski', 'rogerstanimoto', 'russellrao', 'seuclidean', 'sokalmichener', 'sokalsneath', 'sqeuclidean', 'yule']
 
@@ -55,7 +55,7 @@ class QualityTester:
             self.AllDistances[key] = func
 
         #Other distances
-        self.AllDistances.update({'MIC':MIC})
+        # self.AllDistances.update({'MIC':MIC})
         self.AllDistances.update({'Spearman':Spearman})
 
         #None function, ie no distance function
@@ -89,10 +89,10 @@ class QualityTester:
         self.Res={}
         for Ikey in self.Keys['InternIndex']:
             self.Res.update({Ikey:{}})
-            for Dkey in self.Keys['Distance']:
-                for Kkey in self.Keys['Kernel']:
-                    if Dkey is not 'None' or Kkey is not 'None': #Remove the None/None
-                        self.Res[Ikey][Dkey + ' / ' + Kkey] = []
+            # for Dkey in self.Keys['Distance']:
+            #     for Kkey in self.Keys['Kernel']:
+            #         if Dkey is not 'None' or Kkey is not 'None': #Remove the None/None
+            #             self.Res[Ikey][Dkey + ' / ' + Kkey] = []
 
         # self.Keys.update({'Dist-Kernel':self.Res[self.Keys['InternIndex'][0]].keys()})
 
@@ -109,6 +109,12 @@ class QualityTester:
             and compute the internal index according to the labels
         '''
 
+        self.matrix = matrix.copy()
+        self.labels = labels.copy()
+
+        #Remove null profiles and zeros columns
+        self.checkmatrix()
+
         self.Mat = {}
         self.labels = labels
         self.GetMDS = GetMDS
@@ -120,30 +126,49 @@ class QualityTester:
 
             for Kkey in self.Keys['Kernel']:
                 print '\t' + Kkey
-                DKMat = self.computeDistanceMatrix(matrix,Distance=Dkey,Kernel=Kkey)
-
+                DKMat = self.computeDistanceMatrix(Distance=Dkey,Kernel=Kkey)
+                if not np.all(np.isfinite(DKMat)):
+                    continue
                 if Dkey is not 'None' or Kkey is not 'None':
                     if self.GetMDS: self.MDS[Dkey].update({Kkey:self.computeMDS(DKMat)})
 
                     for Ikey in self.Keys['InternIndex']:
-                        self.Res[Ikey][Dkey + ' / ' + Kkey] = self.AllInternIndex[Ikey](DKMat,labels)
+                        self.Res[Ikey].update({Dkey+' / '+Kkey: self.AllInternIndex[Ikey](DKMat,labels)})
                         print '\t\t' + Ikey + ': ' + str(self.Res[Ikey][Dkey + ' / ' + Kkey])
 
 
-    def computeDistanceMatrix(self,matrix,Distance,Kernel):
-        DMat = self.AllDistances[Distance](matrix)
+    def checkmatrix(self):
+
+        #Remove null profiles
+        idx = np.where(self.matrix.sum(axis=1)>0)[0]
+        self.matrix =self. matrix[idx,:]
+        self.labels = self.labels[idx]
+
+        #Reorganise labels to have continuous values
+        labels_tmp = self.labels.copy()
+        for i,l in enumerate(np.unique(self.labels)):
+            labels_tmp[self.labels==l]=i
+        self.labels = labels_tmp
+
+        #Remove zeros columns
+        s = np.sum(self.matrix,axis=0)
+        idx1 = np.where(s>0)[0]
+        self.matrix = self.matrix[:,idx1]
+
+    def computeDistanceMatrix(self,Distance,Kernel):
+        DMat = self.AllDistances[Distance](self.matrix)
         return self.AllKernels[Kernel](DMat,self.labels,Distance)
 
-    def computeMDS(self,matrix):
+    def computeMDS(self,DKMat):
         '''
             Compute the MDS for the fit_computeMDS function
         '''
         mds = MDS(n_components=2,dissimilarity='precomputed')
-        return mds.fit_transform(matrix)
+        return mds.fit_transform(DKMat)
         # tsne = TSNE(n_components=2,metric='precomputed')
         # return tsne.fit_transform(matrix)
 
-    def compute_samples_quality(self,matrix,Distance=None,Kernel=None,NR=100,Tz=2.32,Ikey='Silhouette'):
+    def compute_samples_quality(self,Distance=None,Kernel=None,NR=100,Tz=2.32,Ikey='Silhouette'):
         '''
             Compute the quality of each profiles according to Distance / Kernel
             By default, the Distance/Kernel with the best silhouette score is choosen.
@@ -173,7 +198,7 @@ class QualityTester:
             print '--> (Distance,Kernel) = {}'.format((Distance,Kernel))
 
 
-        self.OptDistMat = self.computeDistanceMatrix(matrix,Distance,Kernel)
+        self.OptDistMat = self.computeDistanceMatrix(Distance,Kernel)
 
         self.IdxGoodSamples,self.SilZ = ZscoreSilhouetteQuality(self.OptDistMat,self.labels,Tz,NR)
 
@@ -257,13 +282,12 @@ class QualityTester:
             sorted_values = values[idx]
             sorted_keys = keys[idx]
 
-            sorted_values[sorted_values<0]=0 #Remove negative values for the dipslay
+            if Ikey=='log10CalinskiHarabaz':sorted_values[sorted_values<0]=0 #Remove negative values for the dipslay
 
             ind = np.arange(len(idx))
 
             # for kk,key in enumzerate(sorted_keys):
             ax[ik].barh(ind, sorted_values)
-
 
             # if set_log == True: ax[ik].set_xlabel('log10')
 
@@ -271,6 +295,13 @@ class QualityTester:
             ax[ik].set_yticks(ind)
             ax[ik].set_yticklabels(sorted_keys)
             ax[ik].set_title(Ikey)
+
+            if Ikey=='Silhouette':
+                if sorted_values.min()<0:
+                    mini = -sorted_values.max()*1.1
+                else:
+                    mini = 0
+                ax[ik].set_xlim([mini,sorted_values.max()*1.1])
 
 
 
@@ -284,7 +315,7 @@ class QualityTester:
         '''
             Display Internal Indexes on all matrices
         '''
-        if self.ComputeMDS==False:
+        if self.GetMDS==False:
             print 'MDS not computed, please launch "compute_distances" \
                    with option "ComputeMDS=True"'
             return None
@@ -294,12 +325,14 @@ class QualityTester:
             ax[dk,0].set_ylabel(Dkey)
             for kk,Kkey in  enumerate(self.Keys['Kernel']):
                 if Dkey is not 'None' or Kkey is not 'None':
-                    XY = self.MDS[Dkey][Kkey]
-                    ax[dk,kk].scatter(XY[:,0],XY[:,1],c=self.labels)
-                    ax[dk,kk].set_xticklabels([])
-                    ax[dk,kk].set_yticklabels([])
-                    ax[dk,kk].grid(color='k',linestyle='--',linewidth=0.1)
-
+                    try:
+                        XY = self.MDS[Dkey][Kkey]
+                        ax[dk,kk].scatter(XY[:,0],XY[:,1],c=self.labels)
+                        ax[dk,kk].set_xticklabels([])
+                        ax[dk,kk].set_yticklabels([])
+                        ax[dk,kk].grid(color='k',linestyle='--',linewidth=0.1)
+                    except:
+                        pass
                 if dk==0:
                     ax[0,kk].set_title(Kkey + '\n' + Dkey + ' / ' + Kkey)
                 else:
@@ -316,7 +349,7 @@ class QualityTester:
             Display Internal Indexes on all matrices
             Ikey = CalinskiHarabaz, Silhouette, Connectivity
         '''
-        fig, ax = plt.subplots(1,1,figsize=(self.displaytop,self.displaytop))
+        fig, ax = plt.subplots(1,1,figsize=(10,10))
 
         keys=[]
         for Ikey in [IkeyX,IkeyY]:
@@ -427,7 +460,7 @@ def Dunn(DistMat,labels):
 
 def Silhouette(Distmat,labels):
     s = silhouette_samples(Distmat,labels,metric='precomputed')
-    s[np.isnan(s)] = 0 #Nan append when 2 clusters has zeros intra and inter distance
+    s[np.isnan(s)] = -1 #Nan append when 2 clusters has zeros intra and inter distance
     # if s<0: s=0
     return s.mean()
 def CalinskiHarabaz(Distmat,labels):
@@ -566,3 +599,87 @@ def get_gammaSig(DistMat,labels):
     gamma = np.power(dmin,-2)
 
     return gamma
+
+#-----------------------------------------------------------------------
+#           Stand-Alone Quality Tester
+#-----------------------------------------------------------------------
+
+def compute_samples_quality_from_distmat(matrix,distmat,labels,names,NR=100,Tz=2.32,Nkeep=-1,NPeaksMin=[]):
+    '''
+        Compute the quality of each profiles according to the given distance matrix
+        This function is to use when the optimal distance measure is known
+
+        The quality is computed as the Zscore of the silouette score of each samples
+        compared to random cluster attribution
+
+        inputs:
+        Tz: Threshold on the zscore
+        NR: Number of random shuffling
+        Nkeep: Number of profiles to keep maximum in each clusters
+        (if -1 all good samples are kept)
+        names (optional): numpy array with names of the cluster (for the final display)
+        NpeaksMin: (vector) Number of peaks minimum in a profile to pass the test
+                   (if -1, the median of the number of peaks per clusters divided by 4
+                   is taken)
+
+        Output:
+        IdxGoodSamples: indexes of the samples which pass the test
+        SilZ: Silhouette Zscore of the samples
+        SilZClust: Mean of the silhouette zscore over the clusters
+
+    '''
+
+    IdxGoodSamples,SilZ = ZscoreSilhouetteQuality(distmat,labels,Tz,NR)
+
+    SilZClust = np.array([SilZ[np.logical_and(labels==l,SilZ>Tz)].mean() for l in np.unique(labels)])
+
+    NPeaks = matrix.sum(axis=1)
+    if len(NPeaksMin)==0:
+        NPeaksMin = np.ones(matrix.shape[0])*np.median(NPeaks)/4.
+        print 'Minimal number of peaks for a sample: {}'.format(NPeaksMin[0])
+
+    IdxGoodSamples = []
+    SilZClust = []
+    for l in np.unique(labels):
+        idx = np.where(np.logical_and(labels==l,SilZ>Tz))[0]
+        idx = idx[NPeaksMin[idx]<NPeaks[idx]]
+
+        if len(idx>0):
+            idx = idx[np.argsort(SilZ[idx])]
+            if Nkeep>0: idx = idx[-Nkeep:]
+
+
+            IdxGoodSamples.extend(idx)
+            SilZClust.append(SilZ[idx].mean())
+
+    IdxGoodSamples = np.array(IdxGoodSamples)
+    SilZClust = np.array(SilZClust)
+
+    #Displays
+    N = len(SilZ)
+    Nk = len(IdxGoodSamples)
+    Nrm = N - Nk
+    print ''
+    print '# Dataset Total: ' + str(N)
+    print '# Dataset Kept: {0} ({1} %)'.format(Nk,round(Nk/float(N)*100,1))
+    print '# Dataset Removed: {0} ({1} %)'.format(Nrm,round(Nrm/float(N)*100,1))
+
+    uniq,count = np.unique(labels[IdxGoodSamples],return_counts=True)
+    idx = np.argsort(uniq)
+    uniq = uniq[idx]
+    count = count[idx]
+    print '\nKept Datasets'
+    print 'Labels\t\tCounts\t\tName\t\tMean Zscore Silhouette'
+    for l,n,c,sz in zip(uniq,names[uniq],count,SilZClust):
+        print '{0}\t\t{1}\t\t{2}\t\t{3}'.format(l,c,n,sz)
+
+    labelsRm = np.array([l for l in np.unique(labels) if l not in uniq])
+    if len(labelsRm)>0:
+        labelsRm = np.sort(labelsRm)
+        print '\nRemoved Datasets'
+        print 'Labels\t\tName'
+        for l,n in zip(labelsRm,names[labelsRm]):
+            print '{0}\t\t{1}'.format(l,n)
+
+
+    return IdxGoodSamples,SilZ,SilZClust

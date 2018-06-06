@@ -17,6 +17,9 @@ def ZscoreSilhouetteQuality(OptDistMat,labels,Tz,NR):
     #Compute Z-score of Silhouette score compared to random cluster attribution
     SilZ = (SilMat - SilMatRand.mean(axis=1))/SilMatRand.std(axis=1)
 
+    #Remove NaN
+    SilZ[~np.isfinite(SilZ)] = 0
+
     #Keep only the samples with a Z-score above Tz (2.32 == pvalue=1e-3 for normal distrib.)
     IdxGoodSamples = np.where(SilZ>Tz)[0]
 
