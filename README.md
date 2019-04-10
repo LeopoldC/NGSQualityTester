@@ -7,7 +7,7 @@ import QualityTester as QT
 #matrix=Samples x Features
 #labels=Samples : Integers corresponding to cluster assignement
 
-qt = QT.QualityTester(Binary=False) #Binary=True  if dataset is binary
+qt = QT.QualityTester(Binary=False) #Binary=True  if dataset is binary. By default binary == false
 qt.compute_distances(matrix=matrix,labels=labels,ComputeMDS=True)
 suff = '_Cont' #Suffix for the name of the images
 qt.displayInternal(Suffix=suff)
