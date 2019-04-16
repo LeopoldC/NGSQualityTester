@@ -203,7 +203,7 @@ class QualityTester:
                             self.Res[Ikey].update({Tkey: self.AllInternIndex[Ikey](self.Distmat[Tkey],self.labels)})
                             self.clust_index_filt_evol[Ikey][Tkey],self.clust_index_filt_score[Ikey][Tkey],self.clust_index_filt_threshold[Ikey][Tkey] = self.ClustIndexFilt(self.Distmat[Tkey],self.labels,Ikey)
 
-                            print ('\t\t\t' + Ikey + ' (Clustering,CF) index: ( {0} , {1} )'.format(self.Res[Ikey][Tkey],self.clust_index_filt_score[Ikey][Tkey]))
+                            print ('\t\t\t' + Ikey + ' Clustering index= {0}'.format(self.Res[Ikey][Tkey])
 
                         except Exception as e:
                             print(e)
