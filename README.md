@@ -1,3 +1,12 @@
+#Package needed
+In order to use this repository, you need in python 2:
+-scikit-learn >= 0.20 
+-numpy
+-scipy
+-hdf5
+-matplotlib
+-tdqm
+
 # NGSQualityTester
 
 ## How to use:
